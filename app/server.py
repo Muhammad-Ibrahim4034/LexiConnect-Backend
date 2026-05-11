@@ -7,9 +7,9 @@ import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from database import engine, SessionLocal, Base, get_db
-from models import User, Chat, Conversation, Advocate
-from schemas import UserCreate, AdvocateOut
+from app.database import engine, SessionLocal, Base, get_db
+from app.models import User, Chat, Conversation, Advocate
+from app.schemas import UserCreate, AdvocateOut
 from jose import jwt, JWTError
 import json
 import asyncio
