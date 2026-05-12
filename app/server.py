@@ -76,7 +76,8 @@ class OTPVerify(BaseModel):
     email: str
     otp: str
 
-# --- Send OTP endpoint ---
+import threading
+
 @app.post("/send-otp")
 def send_otp(request: OTPRequest):
     otp = str(random.randint(100000, 999999))
@@ -84,11 +85,18 @@ def send_otp(request: OTPRequest):
     
     otp_store[request.email] = {"otp": otp, "expires": expires}
     
-    try:
-        send_otp_email(request.email, otp)
-        return {"message": "OTP sent successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+    # Send email in background thread so it doesn't hang
+    def send_email_thread():
+        try:
+            send_otp_email(request.email, otp)
+            print(f"✅ OTP sent to {request.email}")
+        except Exception as e:
+            print(f"❌ Email error: {e}")
+    
+    thread = threading.Thread(target=send_email_thread)
+    thread.start()
+    
+    return {"message": "OTP sent successfully"}
 
 # --- Verify OTP endpoint ---
 @app.post("/verify-otp")
