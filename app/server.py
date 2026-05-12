@@ -81,24 +81,22 @@ import resend
 import os
 @app.post("/send-otp")
 def send_otp_endpoint(request: OTPRequest):
-    resend.api_key = os.environ.get("RESEND_API_KEY")
+    otp = str(random.randint(100000, 999999))
+    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
     
-    params = {
-        "from": "LexiConnect <onboarding@resend.dev>",
-        "to": [request.email],
-        "subject": "LexiConnect - Your OTP Code",
-        "html": f"""
-            <h2>Your OTP Code</h2>
-            <p>Your one-time password is: <strong style="font-size:24px">{request.otp}</strong></p>
-            <p>This code expires in 10 minutes.</p>
-            <p>If you didn't request this, ignore this email.</p>
-        """
-    }
+    otp_store[request.email] = {"otp": otp, "expires": expires}
     
-    response = resend.Emails.send(params)
-    print(f"✅ Email sent: {response}")
-    return response
-
+    def send_email_thread():
+        try:
+            send_otp_email(request.email, otp)  # ✅ pass otp separately
+            print(f"✅ OTP sent to {request.email}")
+        except Exception as e:
+            print(f"❌ Email error: {e}")
+    
+    thread = threading.Thread(target=send_email_thread)
+    thread.start()
+    
+    return {"message": "OTP sent successfully"}
 # --- Verify OTP endpoint ---
 @app.post("/verify-otp")
 def verify_otp_endpoint(request: OTPVerify):
