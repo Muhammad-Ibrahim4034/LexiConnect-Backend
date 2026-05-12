@@ -14,6 +14,13 @@ from jose import jwt, JWTError
 import json
 import asyncio
 from google import genai
+import smtplib
+import os
+import random
+import threading
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta, timezone
 
 
 # --- FastAPI Setup ---
@@ -46,7 +53,18 @@ import os
 # --- OTP Storage (in-memory) ---
 otp_store = {}  # {email: {"otp": "123456", "expires": datetime}}
 
-# --- Email sending function ---
+
+class OTPRequest(BaseModel):
+    email: str
+
+class OTPVerify(BaseModel):
+    email: str
+    otp: str
+
+import threading
+
+import resend
+import os
 def send_otp_email(email: str, otp: str):
     sender = os.environ.get("EMAIL_SENDER")
     password = os.environ.get("EMAIL_PASSWORD")
@@ -64,21 +82,11 @@ def send_otp_email(email: str, otp: str):
     """
     msg.attach(MIMEText(body, "html"))
     
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    with smtplib.SMTP("smtp-relay.brevo.com", 587) as server:
+        server.starttls()
         server.login(sender, password)
         server.sendmail(sender, email, msg.as_string())
 
-class OTPRequest(BaseModel):
-    email: str
-
-class OTPVerify(BaseModel):
-    email: str
-    otp: str
-
-import threading
-
-import resend
-import os
 @app.post("/send-otp")
 def send_otp_endpoint(request: OTPRequest):
     otp = str(random.randint(100000, 999999))
@@ -88,13 +96,15 @@ def send_otp_endpoint(request: OTPRequest):
     
     def send_email_thread():
         try:
-            send_otp_email(request.email, otp)  # ✅ pass otp separately
+            send_otp_email(request.email, otp)
             print(f"✅ OTP sent to {request.email}")
         except Exception as e:
             print(f"❌ Email error: {e}")
     
     thread = threading.Thread(target=send_email_thread)
     thread.start()
+    
+    return {"message": "OTP sent successfully"}
     
     return {"message": "OTP sent successfully"}
 # --- Verify OTP endpoint ---
