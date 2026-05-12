@@ -68,7 +68,6 @@ def send_otp_email(email: str, otp: str):
         server.login(sender, password)
         server.sendmail(sender, email, msg.as_string())
 
-# --- Pydantic models for OTP ---
 class OTPRequest(BaseModel):
     email: str
 
@@ -81,16 +80,16 @@ import threading
 import resend
 import os
 @app.post("/send-otp")
-def send_otp_email(email: str, otp: str):
+def send_otp_endpoint(request: OTPRequest):
     resend.api_key = os.environ.get("RESEND_API_KEY")
     
     params = {
         "from": "LexiConnect <onboarding@resend.dev>",
-        "to": [email],
+        "to": [request.email],
         "subject": "LexiConnect - Your OTP Code",
         "html": f"""
             <h2>Your OTP Code</h2>
-            <p>Your one-time password is: <strong style="font-size:24px">{otp}</strong></p>
+            <p>Your one-time password is: <strong style="font-size:24px">{request.otp}</strong></p>
             <p>This code expires in 10 minutes.</p>
             <p>If you didn't request this, ignore this email.</p>
         """
@@ -102,7 +101,7 @@ def send_otp_email(email: str, otp: str):
 
 # --- Verify OTP endpoint ---
 @app.post("/verify-otp")
-def verify_otp(request: OTPVerify):
+def verify_otp_endpoint(request: OTPVerify):
     record = otp_store.get(request.email)
     
     if not record:
