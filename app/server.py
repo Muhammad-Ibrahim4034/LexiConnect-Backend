@@ -62,29 +62,39 @@ class OTPVerify(BaseModel):
     otp: str
 
 import threading
+import requests
 
 import os
 def send_otp_email(email: str, otp: str):
-    sender = os.environ.get("EMAIL_SENDER")
-    password = os.environ.get("EMAIL_PASSWORD")
+    api_key = os.environ.get("BREVO_API_KEY")
     
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = email
-    msg["Subject"] = "LexiConnect - Your OTP Code"
+    url = "https://api.brevo.com/v3/smtp/email"
     
-    body = f"""
-    <h2>Your OTP Code</h2>
-    <p>Your one-time password is: <strong>{otp}</strong></p>
-    <p>This code expires in 10 minutes.</p>
-    <p>If you didn't request this, ignore this email.</p>
-    """
-    msg.attach(MIMEText(body, "html"))
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
     
-    with smtplib.SMTP("smtp-relay.brevo.com", 587) as server:
-        server.starttls()
-        server.login(sender, password)
-        server.sendmail(sender, email, msg.as_string())
+    payload = {
+        "sender": {
+            "name": "LexiConnect",
+            "email": os.environ.get("EMAIL_SENDER")
+        },
+        "to": [{"email": email}],
+        "subject": "LexiConnect - Your OTP Code",
+        "htmlContent": f"""
+            <h2>Your OTP Code</h2>
+            <p>Your one-time password is: <strong>{otp}</strong></p>
+            <p>This code expires in 10 minutes.</p>
+            <p>If you didn't request this, ignore this email.</p>
+        """
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    
+    if response.status_code != 201:
+        raise Exception(f"Brevo API error: {response.status_code} - {response.text}")
 
 @app.post("/send-otp")
 def send_otp_endpoint(request: OTPRequest):
