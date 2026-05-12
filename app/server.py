@@ -140,8 +140,8 @@ def generate_ai_response(user_input: str):
 
     if rag is None:
 
-        from rag.embeddings_groq import EnhancedLawRAGSystem
-
+        from app.rag.embeddings_groq import EnhancedLawRAGSystem
+        
         rag = EnhancedLawRAGSystem.load_system("app/rag/law_rag_v3.pkl")
         rag.load_llm()
         print("📘 RAG System Ready!")
