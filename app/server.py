@@ -63,7 +63,6 @@ class OTPVerify(BaseModel):
 
 import threading
 
-import resend
 import os
 def send_otp_email(email: str, otp: str):
     sender = os.environ.get("EMAIL_SENDER")
