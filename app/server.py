@@ -78,6 +78,21 @@ class OTPVerify(BaseModel):
 
 import threading
 
+@app.get("/test-email")
+def test_email():
+    import os
+    sender = os.environ.get("EMAIL_SENDER")
+    password = os.environ.get("EMAIL_PASSWORD")
+    
+    print(f"📧 Sender: {sender}")
+    print(f"🔑 Password exists: {bool(password)}")
+    
+    try:
+        send_otp_email(sender, "123456")  # Send test email to yourself
+        return {"message": "Email sent!", "sender": sender}
+    except Exception as e:
+        return {"error": str(e), "sender": sender}
+    
 @app.post("/send-otp")
 def send_otp(request: OTPRequest):
     otp = str(random.randint(100000, 999999))
