@@ -93,25 +93,34 @@ def test_email():
     except Exception as e:
         return {"error": str(e), "sender": sender}
     
-@app.post("/send-otp")
-def send_otp(request: OTPRequest):
-    otp = str(random.randint(100000, 999999))
-    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+def send_otp_email(email: str, otp: str):
+    import os
+    sender = os.environ.get("EMAIL_SENDER")
+    password = os.environ.get("EMAIL_PASSWORD")
     
-    otp_store[request.email] = {"otp": otp, "expires": expires}
+    print(f"📧 Attempting to send OTP to {email} from {sender}")
     
-    # Send email in background thread so it doesn't hang
-    def send_email_thread():
-        try:
-            send_otp_email(request.email, otp)
-            print(f"✅ OTP sent to {request.email}")
-        except Exception as e:
-            print(f"❌ Email error: {e}")
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = email
+    msg["Subject"] = "LexiConnect - Your OTP Code"
     
-    thread = threading.Thread(target=send_email_thread)
-    thread.start()
+    body = f"""
+    <h2>Your OTP Code</h2>
+    <p>Your one-time password is: <strong>{otp}</strong></p>
+    <p>This code expires in 10 minutes.</p>
+    <p>If you didn't request this, ignore this email.</p>
+    """
+    msg.attach(MIMEText(body, "html"))
     
-    return {"message": "OTP sent successfully"}
+    # ✅ Use port 587 with TLS instead of 465 SSL
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(sender, password)
+        server.sendmail(sender, email, msg.as_string())
+        print(f"✅ Email sent successfully to {email}")
 
 # --- Verify OTP endpoint ---
 @app.post("/verify-otp")
