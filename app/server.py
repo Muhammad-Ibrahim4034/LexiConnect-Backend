@@ -93,34 +93,27 @@ def test_email():
     except Exception as e:
         return {"error": str(e), "sender": sender}
     
+import resend
+import os
+
 def send_otp_email(email: str, otp: str):
-    import os
-    sender = os.environ.get("EMAIL_SENDER")
-    password = os.environ.get("EMAIL_PASSWORD")
+    resend.api_key = os.environ.get("RESEND_API_KEY")
     
-    print(f"📧 Attempting to send OTP to {email} from {sender}")
+    params = {
+        "from": "LexiConnect <onboarding@resend.dev>",
+        "to": [email],
+        "subject": "LexiConnect - Your OTP Code",
+        "html": f"""
+            <h2>Your OTP Code</h2>
+            <p>Your one-time password is: <strong style="font-size:24px">{otp}</strong></p>
+            <p>This code expires in 10 minutes.</p>
+            <p>If you didn't request this, ignore this email.</p>
+        """
+    }
     
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = email
-    msg["Subject"] = "LexiConnect - Your OTP Code"
-    
-    body = f"""
-    <h2>Your OTP Code</h2>
-    <p>Your one-time password is: <strong>{otp}</strong></p>
-    <p>This code expires in 10 minutes.</p>
-    <p>If you didn't request this, ignore this email.</p>
-    """
-    msg.attach(MIMEText(body, "html"))
-    
-    # ✅ Use port 587 with TLS instead of 465 SSL
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(sender, password)
-        server.sendmail(sender, email, msg.as_string())
-        print(f"✅ Email sent successfully to {email}")
+    response = resend.Emails.send(params)
+    print(f"✅ Email sent: {response}")
+    return response
 
 # --- Verify OTP endpoint ---
 @app.post("/verify-otp")
