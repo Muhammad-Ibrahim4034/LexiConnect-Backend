@@ -37,6 +37,77 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 # --- Password hashing ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+
+# --- OTP Storage (in-memory) ---
+otp_store = {}  # {email: {"otp": "123456", "expires": datetime}}
+
+# --- Email sending function ---
+def send_otp_email(email: str, otp: str):
+    sender = os.environ.get("EMAIL_SENDER")
+    password = os.environ.get("EMAIL_PASSWORD")
+    
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = email
+    msg["Subject"] = "LexiConnect - Your OTP Code"
+    
+    body = f"""
+    <h2>Your OTP Code</h2>
+    <p>Your one-time password is: <strong>{otp}</strong></p>
+    <p>This code expires in 10 minutes.</p>
+    <p>If you didn't request this, ignore this email.</p>
+    """
+    msg.attach(MIMEText(body, "html"))
+    
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, password)
+        server.sendmail(sender, email, msg.as_string())
+
+# --- Pydantic models for OTP ---
+class OTPRequest(BaseModel):
+    email: str
+
+class OTPVerify(BaseModel):
+    email: str
+    otp: str
+
+# --- Send OTP endpoint ---
+@app.post("/send-otp")
+def send_otp(request: OTPRequest):
+    otp = str(random.randint(100000, 999999))
+    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    otp_store[request.email] = {"otp": otp, "expires": expires}
+    
+    try:
+        send_otp_email(request.email, otp)
+        return {"message": "OTP sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+# --- Verify OTP endpoint ---
+@app.post("/verify-otp")
+def verify_otp(request: OTPVerify):
+    record = otp_store.get(request.email)
+    
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP found for this email")
+    
+    if datetime.now(timezone.utc) > record["expires"]:
+        del otp_store[request.email]
+        raise HTTPException(status_code=400, detail="OTP has expired")
+    
+    if record["otp"] != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    del otp_store[request.email]
+    return {"message": "OTP verified successfully"}
+
 def hash_password(password: str):
     return pwd_context.hash(password)
 
@@ -141,7 +212,7 @@ def generate_ai_response(user_input: str):
     if rag is None:
 
         from app.rag.embeddings_groq import EnhancedLawRAGSystem
-        
+
         rag = EnhancedLawRAGSystem.load_system("app/rag/law_rag_v3.pkl")
         rag.load_llm()
         print("📘 RAG System Ready!")
