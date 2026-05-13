@@ -353,26 +353,30 @@ class ConversationCreateRequest(BaseModel):
 
 # --- AI RAG system setup ---
 rag = None
-def generate_ai_response(user_input: str):
+def generate_ai_response(user_input: str, conversation_history: list = None):
     global rag
 
-
     if rag is None:
-
         from app.rag.embeddings_groq import EnhancedLawRAGSystem
-
         rag = EnhancedLawRAGSystem.load_system("app/rag/law_rag_v3.pkl")
         rag.load_llm()
         print("📘 RAG System Ready!")
 
     reply, sources = "", []
     if user_input.strip() != "":
+        # Pass conversation history if your RAG supports it
+        if conversation_history and hasattr(rag, 'set_conversation_history'):
+            rag.set_conversation_history(conversation_history)
+        elif hasattr(rag, 'conversation_history'):
+            rag.conversation_history = conversation_history or []
+        elif hasattr(rag, 'chat_history'):
+            rag.chat_history = conversation_history or []
+            
         result = rag.query(user_input)
         reply = result["answer"]
         sources = []
 
     return reply, sources
-
 # --- Helper function to generate conversation title ---
 def generate_conversation_title(first_message: str) -> str:
     """Generate a title from the first message (max 50 chars)"""
@@ -460,57 +464,65 @@ def ensure_markdown_formatting(text: str) -> str:
 
 # --- Background task to process AI response ---
 def process_ai_response(message_id: int, user_input: str, conversation_id: int):
-    """Background task that processes AI response"""
     db = SessionLocal()
     try:
-        # Get the pending message
         assistant_message = db.query(Chat).filter(Chat.id == message_id).first()
-        
         if not assistant_message:
             return
-        
-        # Generate AI response
-        reply, sources = generate_ai_response(user_input)
 
+        # ✅ Fetch this conversation's actual history (excluding the pending message)
+        previous_messages = (
+            db.query(Chat)
+            .filter(
+                Chat.conversation_id == conversation_id,
+                Chat.id != message_id,
+                Chat.status == "completed"
+            )
+            .order_by(Chat.timestamp.asc())
+            .all()
+        )
+
+        # Format history the way most RAG/LLM systems expect
+        conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in previous_messages
+            if msg.content  # skip empty/pending messages
+        ]
+
+        reply, sources = generate_ai_response(user_input, conversation_history)
         reply = ensure_markdown_formatting(reply)
 
-        # Update the message with the response
         assistant_message.content = reply
         assistant_message.sources = json.dumps(sources) if sources else None
         assistant_message.status = "completed"
-        
-        # Update conversation's updated_at timestamp
+
         conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
         if conversation:
             conversation.updated_at = datetime.now(timezone.utc)
-        
+
         db.commit()
-        
-        # Notify SSE listeners that this message is ready
+
         message_updates[message_id] = {
             "status": "completed",
             "content": reply,
             "sources": sources,
             "timestamp": assistant_message.timestamp.isoformat()
         }
-        
+
         print(f"✅ Completed response for message {message_id}")
-        
+
     except Exception as e:
         print(f"❌ Error processing message {message_id}: {e}")
-        # Mark as failed
         assistant_message = db.query(Chat).filter(Chat.id == message_id).first()
         if assistant_message:
             assistant_message.status = "failed"
             assistant_message.content = "Error generating response"
             db.commit()
-            
-        # Notify SSE listeners about the failure
         message_updates[message_id] = {
             "status": "failed",
             "content": "Error generating response",
             "sources": [],
-            "timestamp": assistant_message.timestamp.isoformat() if assistant_message else datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     finally:
         db.close()
