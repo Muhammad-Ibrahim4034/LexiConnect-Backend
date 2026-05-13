@@ -428,7 +428,35 @@ def get_lawyers(
 
     return result
 
-
+def ensure_markdown_formatting(text: str) -> str:
+    """If the text has no markdown formatting, reformat it."""
+    has_markdown = any(c in text for c in ['**', '##', '- ', '* ', '`'])
+    if has_markdown:
+        return text  # Already formatted, skip
+    
+    lines = text.strip().split('\n')
+    result = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Detect numbered list items like "1." "2." etc
+        import re
+        numbered = re.match(r'^(\d+)\.\s+(.+)', line)
+        if numbered:
+            result.append(f"{numbered.group(1)}. {numbered.group(2)}")
+            continue
+        
+        # Detect lines ending with colon — treat as bold heading
+        if line.endswith(':') and len(line) < 80:
+            result.append(f"\n**{line}**")
+            continue
+        
+        result.append(line)
+    
+    return '\n'.join(result)
 
 # --- Background task to process AI response ---
 def process_ai_response(message_id: int, user_input: str, conversation_id: int):
@@ -443,7 +471,9 @@ def process_ai_response(message_id: int, user_input: str, conversation_id: int):
         
         # Generate AI response
         reply, sources = generate_ai_response(user_input)
-        
+
+        reply = ensure_markdown_formatting(reply)
+
         # Update the message with the response
         assistant_message.content = reply
         assistant_message.sources = json.dumps(sources) if sources else None
