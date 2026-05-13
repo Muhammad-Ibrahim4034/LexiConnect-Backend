@@ -362,21 +362,49 @@ def generate_ai_response(user_input: str, conversation_history: list = None):
         rag.load_llm()
         print("📘 RAG System Ready!")
 
+    # ✅ Reset RAG's internal history before every query
+    rag._conversation_turns = []
+    rag.memory = rag.__class__.__module__  # Reset structured memory too
+
+    # ✅ Inject only THIS conversation's actual history
+    if conversation_history:
+        for msg in conversation_history:
+            if msg["role"] == "user":
+                # We need pairs (user, assistant), so we'll build them below
+                pass
+    
+    # Build proper turn pairs from conversation history
+    if conversation_history:
+        turns = []
+        i = 0
+        while i < len(conversation_history):
+            if conversation_history[i]["role"] == "user":
+                user_msg = conversation_history[i]["content"]
+                # Look for the next assistant message
+                assistant_msg = ""
+                if i + 1 < len(conversation_history) and conversation_history[i+1]["role"] == "assistant":
+                    assistant_msg = conversation_history[i+1]["content"] or ""
+                    i += 2
+                else:
+                    i += 1
+                if user_msg and assistant_msg:
+                    turns.append((user_msg, assistant_msg))
+            else:
+                i += 1
+        rag._conversation_turns = turns
+
+    # Reset structured memory (fresh per conversation)
+    from app.rag.embeddings_groq import StructuredMemory
+    rag.memory = StructuredMemory()
+
     reply, sources = "", []
-    if user_input.strip() != "":
-        # Pass conversation history if your RAG supports it
-        if conversation_history and hasattr(rag, 'set_conversation_history'):
-            rag.set_conversation_history(conversation_history)
-        elif hasattr(rag, 'conversation_history'):
-            rag.conversation_history = conversation_history or []
-        elif hasattr(rag, 'chat_history'):
-            rag.chat_history = conversation_history or []
-            
+    if user_input.strip():
         result = rag.query(user_input)
         reply = result["answer"]
         sources = []
 
     return reply, sources
+
 # --- Helper function to generate conversation title ---
 def generate_conversation_title(first_message: str) -> str:
     """Generate a title from the first message (max 50 chars)"""
