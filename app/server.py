@@ -61,6 +61,13 @@ class OTPVerify(BaseModel):
     email: str
     otp: str
 
+class ActivityItem(BaseModel):
+    id: int
+    type: str
+    title: str
+    time: str
+    conversation_id: int
+
 import threading
 import requests
 
@@ -191,7 +198,79 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
     
     return user
-
+def _relative_time(dt: datetime) -> str:
+    """Convert a datetime to a human-readable relative string."""
+    # Make sure both sides are offset-aware for comparison
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    diff = now - dt
+    seconds = int(diff.total_seconds())
+ 
+    if seconds < 60:
+        return "just now"
+    elif seconds < 3600:
+        m = seconds // 60
+        return f"{m} minute{'s' if m > 1 else ''} ago"
+    elif seconds < 86400:
+        h = seconds // 3600
+        return f"{h} hour{'s' if h > 1 else ''} ago"
+    elif seconds < 604800:
+        d = seconds // 86400
+        return f"{d} day{'s' if d > 1 else ''} ago"
+    else:
+        w = seconds // 604800
+        return f"{w} week{'s' if w > 1 else ''} ago"
+ 
+ 
+@app.get("/activity/recent", response_model=List[ActivityItem])
+def get_recent_activity(
+    limit: int = 5,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Returns the most recent conversations for the logged-in user.
+    Uses the conversation title (set automatically from the first message)
+    as the activity label.
+    """
+    conversations = (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user.id)
+        .order_by(Conversation.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+ 
+    items = []
+    for conv in conversations:
+        title = conv.title or "Untitled conversation"
+ 
+        # If the title is still the default, try to use the first user message
+        if title in ("New Chat", "Untitled conversation"):
+            first_msg = (
+                db.query(Chat)
+                .filter(Chat.conversation_id == conv.id, Chat.role == "user")
+                .order_by(Chat.timestamp.asc())
+                .first()
+            )
+            if first_msg and first_msg.content:
+                title = first_msg.content
+ 
+        # Truncate long titles
+        if len(title) > 80:
+            title = title[:77] + "..."
+ 
+        items.append(ActivityItem(
+            id=conv.id,
+            type="chat",
+            title=title,
+            time=_relative_time(conv.updated_at),
+            conversation_id=conv.id,
+        ))
+ 
+    return items
+ 
 # --- Pydantic models ---
 class UserOut(BaseModel):
     id: int
