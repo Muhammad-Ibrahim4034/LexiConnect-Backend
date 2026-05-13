@@ -1,52 +1,35 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import time
+import os
 
-# SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite:///./users.db"
+# Get DATABASE_URL from Railway environment
+# Falls back to SQLite only for local development
+SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./users.db")
 
-# Create engine with proper SQLite configuration
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,
-        "timeout": 30.0  # 30 second timeout for locked database
-    },
-    echo=False
-)
+# Railway provides 'postgres://' but SQLAlchemy needs 'postgresql://'
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Enable WAL mode and other pragmas for better concurrency
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_conn, connection_record):
-    cursor = dbapi_conn.cursor()
-    
-    # Try to set WAL mode with retries
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            # Enable WAL mode for better concurrency
-            cursor.execute("PRAGMA journal_mode=WAL")
-            
-            # Other optimizations
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=30000")  # 30 second busy timeout
-            cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
-            
-            cursor.close()
-            break
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"⚠️  Attempt {attempt + 1} to configure database failed, retrying...")
-                time.sleep(1)
-                cursor = dbapi_conn.cursor()
-            else:
-                print(f"⚠️  Warning: Could not enable WAL mode: {e}")
-                print("    Database will work but with reduced concurrency")
-                try:
-                    cursor.close()
-                except:
-                    pass
+# PostgreSQL engine (no SQLite-specific args needed)
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_size=5,          # Max 5 persistent connections
+        max_overflow=10,      # Up to 10 extra connections under load
+        pool_pre_ping=True,   # Test connection before using (handles dropped connections)
+        echo=False
+    )
+else:
+    # Local SQLite fallback (your existing config)
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        connect_args={
+            "check_same_thread": False,
+            "timeout": 30.0
+        },
+        echo=False
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
