@@ -152,6 +152,49 @@ def verify_password(plain_password, hashed_password):
     plain_password = plain_password[:72]  # bcrypt limit
     return pwd_context.verify(plain_password, hashed_password)
 
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+
+# Tracks which emails have completed OTP verification (ready to reset)
+verified_reset_emails = set()
+
+@app.post("/verify-otp-reset")
+def verify_otp_for_reset(request: OTPVerify):
+    """Verify OTP specifically for password reset — marks email as verified."""
+    record = otp_store.get(request.email)
+    
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP found for this email")
+    
+    if datetime.now(timezone.utc) > record["expires"]:
+        del otp_store[request.email]
+        raise HTTPException(status_code=400, detail="OTP has expired")
+    
+    if record["otp"] != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    del otp_store[request.email]
+    verified_reset_emails.add(request.email)
+    return {"message": "OTP verified successfully"}
+
+@app.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password after OTP has been verified."""
+    if request.email not in verified_reset_emails:
+        raise HTTPException(status_code=403, detail="Email not verified. Please complete OTP verification first.")
+    
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.password_hash = get_password_hash(request.new_password)
+    db.commit()
+    
+    verified_reset_emails.discard(request.email)
+    return {"message": "Password reset successfully"}
+
+
 # --- JWT Token Functions ---
 def create_access_token(data: dict):
     to_encode = data.copy()
