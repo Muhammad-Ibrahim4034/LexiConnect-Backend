@@ -392,6 +392,7 @@ Rules:
 - Do NOT answer the question — only rewrite it
 - Output ONE sentence, no preamble
 
+
 Conversation so far:
 {recent}
 
@@ -712,7 +713,13 @@ Your response must:
 
 Emergency: {resources['emergency']} | Helpline: {resources['domestic_violence']} | Shelter: {resources['shelter']}
 
-Keep the response under 300 words. Plain language only."""
+Keep the response under 300 words.
+IMPORTANT - Always format your response using markdown:
+- Use **bold** for important terms, law names, and key points
+- Use numbered lists (1. 2. 3.) for steps or procedures  
+- Use bullet points (- ) for options or items
+- Use ## for section headings when the answer has multiple sections
+- Never respond in plain unformatted paragraph text"""
 
         user = f"""{memory}
 
@@ -738,7 +745,13 @@ Answer the specific question asked. Give numbered action steps. Name the relevan
 "CRITICAL: Only cite law names and section numbers that appear verbatim in the provided references. "
 "If you cannot find a specific provision in the references, say 'the specific section is not in the available references' rather than citing from memory."
 
-Emergency: {resources['emergency']}. Keep under 250 words."""
+Emergency: {resources['emergency']}. Keep under 250 words.
+IMPORTANT - Always format your response using markdown:
+- Use **bold** for important terms, law names, and key points
+- Use numbered lists (1. 2. 3.) for steps or procedures  
+- Use bullet points (- ) for options or items
+- Use ## for section headings when the answer has multiple sections
+- Never respond in plain unformatted paragraph text"""
 
         user = f"""{memory}
 
@@ -764,7 +777,13 @@ Answer the specific question directly. Give numbered practical steps. Name the r
 "CRITICAL: Only cite law names and section numbers that appear verbatim in the provided references. "
 "If you cannot find a specific provision in the references, say 'the specific section is not in the available references' rather than citing from memory."
 
-If further help is needed: {resources['legal_aid']}. Keep under 250 words. Plain language."""
+If further help is needed: {resources['legal_aid']}. Keep under 250 words.
+IMPORTANT - Always format your response using markdown:
+- Use **bold** for important terms, law names, and key points
+- Use numbered lists (1. 2. 3.) for steps or procedures  
+- Use bullet points (- ) for options or items
+- Use ## for section headings when the answer has multiple sections
+- Never respond in plain unformatted paragraph text"""
 
         user = f"""{memory}
 
