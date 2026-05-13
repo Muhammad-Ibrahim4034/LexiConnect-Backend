@@ -2,10 +2,3 @@ venv/
 __pycache__/
 .env
 *.pyc
-
-# Database
-users.db
-
-# SQLite files
-*.db
-*.sqlite3
