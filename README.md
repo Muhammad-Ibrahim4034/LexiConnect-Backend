@@ -230,8 +230,9 @@ docker run -p 8000:8000 lexiconnect-backend
 * Add role-based access control
 
 ## Author
-**Muhammad Hamza Nawaz**
-**Rameela Hassan**
+
+**Muhammad Hamza Nawaz**<br>
+**Rameela Hassan**<br>
 **Muhammad Ibrahim**
 
 
